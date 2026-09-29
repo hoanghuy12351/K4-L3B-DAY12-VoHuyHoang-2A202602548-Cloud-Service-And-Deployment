@@ -35,19 +35,13 @@ Chạy service và gọi `/ask` vài lần. Dán một dòng log JSON bạn thu 
 nêu **hai** việc bạn làm được với dòng log đó mà `print("đã trả lời xong")`
 không làm được.
 
-> Log tôi quan sát được khi gọi `log_event` trực tiếp là:
-> `{"event": "cp1_test", "level": "warning", "timestamp": "2026-09-29T03:41:18.805427+00:00", "user_id": "sv01", "message": "Kiem tra structured log"}`.
-> Dòng log gồm các trường `event`, `level`, `timestamp`, `user_id` và `message`.
-> So với `print("đã trả lời xong")`, JSON log cho phép tôi lọc theo mức
-> `warning` và nhóm hoặc đếm sự kiện theo `event` hay `user_id`; nó cũng cho
-> phép hệ thống giám sát đọc chính xác thời gian xảy ra sự kiện. Yêu cầu một
-> dòng quan trọng vì nền tảng cloud thường coi mỗi dòng stdout là một bản ghi;
-> nếu một JSON bị tách thành nhiều dòng thì bộ thu thập log có thể coi chúng là
-> nhiều sự kiện hỏng. Từ dòng log này, tôi có thể tạo truy vấn đếm số cảnh báo
-> theo `event` trong 5 phút gần nhất, hoặc cảnh báo khi một `user_id` tạo quá
-> nhiều sự kiện `warning`. Ở CP1 tôi chưa gọi được `/ask` vì endpoint đó còn
-> phụ thuộc các TODO của CP3/CP4; sau khi hoàn thành các checkpoint đó, tôi sẽ
-> thay dòng thử nghiệm này bằng log `ask_completed` thu được từ request thật.
+> Khi chạy Uvicorn và gửi request thật tới `/ask`, tôi nhận được một dòng log:
+> `{"event": "ask_completed", "level": "info", "timestamp": "2026-09-29T04:35:23.230066+00:00", "user_id": "cp4-smoke-2835e264ad1c4a6e81a410f708daa3da", "tokens_in": 7, "tokens_out": 46, "cost_usd": 2.865e-05}`.
+> So với `print("đã trả lời xong")`, tôi có thể (1) lọc/đếm số lượt
+> `ask_completed` của từng `user_id` trong một khoảng thời gian dựa vào
+> `timestamp`, và (2) cộng `cost_usd` hoặc tổng token theo user để phát hiện
+> mức sử dụng bất thường. JSON nằm trên một dòng stdout để hệ thống thu thập
+> log nhận đúng một sự kiện, thay vì tách một object thành nhiều bản ghi.
 
 ---
 
@@ -151,7 +145,17 @@ nhưng cost guard phải chặn, và một tình huống ngược lại.
 Nếu gộp hai endpoint làm một và cho nó kiểm tra Redis, chuyện gì xảy ra với cụm
 3 container khi Redis mất kết nối 30 giây? Trả lời theo đúng thứ tự sự kiện.
 
-> *Câu trả lời của bạn*
+> Nếu gộp `/health` và `/ready` rồi bắt cả hai kiểm tra Redis, thứ tự sẽ là:
+> (1) Redis mất kết nối; (2) cả ba container cùng trả 503 cho probe, dù tiến
+> trình FastAPI vẫn sống; (3) load balancer có thể ngừng gửi request vào cả ba;
+> (4) nếu nền tảng dùng kết quả đó làm liveness và đạt ngưỡng thất bại, nó còn
+> khởi động lại các container, làm gián đoạn thêm các request đang xử lý mà
+> không sửa được Redis. Khi Redis trở lại, các probe mới có thể báo 200 và
+> traffic tiếp tục. Với cấu hình Docker Compose hiện tại, healthcheck chạy
+> mỗi 10 giây và cần 5 lần thất bại; 30 giây chưa chắc đủ để đánh dấu
+> `unhealthy`, và Docker Compose không tự restart chỉ vì healthcheck thất bại.
+> Tách `/health` (process sống, vẫn 200) khỏi `/ready` (Redis chết, trả 503)
+> tránh đánh đồng lỗi dependency với lỗi cần restart process.
 
 ---
 
@@ -161,7 +165,16 @@ Chạy `docker compose up --scale agent=3` rồi gọi `/ask` nhiều lần vớ
 `X-User-Id`. Quan sát `history_length` trong response. Nếu lịch sử được lưu
 trong một dict Python thay vì Redis, bạn sẽ thấy con số đó thay đổi thế nào?
 
-> *Câu trả lời của bạn*
+> Tôi chạy ba container `agent` trên cùng mạng Compose và cùng Redis, rồi gọi
+> `/ask` lần lượt vào từng container với một `X-User-Id`. Kết quả quan sát được
+> của `history_length` là `0 → 2 → 4`: mỗi request ghi hai message (user và
+> assistant), và container kế tiếp đọc được lịch sử do container trước ghi.
+> Tôi dùng các container không publish cổng host vì `docker-compose.yml` đang
+> cố định `8000:8000`, nên lệnh `docker compose up --scale agent=3` sẽ xung
+> đột cổng. Nếu thay Redis bằng một dict Python trong từng process, mỗi
+> container chỉ thấy lịch sử riêng của nó; khi lần lượt gọi ba container,
+> kết quả sẽ là `0 → 0 → 0`, còn qua load balancer thì số này có thể nhảy
+> không đều hoặc giảm khi request chuyển sang container khác.
 
 ---
 
