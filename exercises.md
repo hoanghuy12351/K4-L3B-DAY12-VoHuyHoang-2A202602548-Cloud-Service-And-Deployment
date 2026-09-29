@@ -122,7 +122,12 @@ phút đồng hồ (reset lúc giây 00), một người dùng có thể gửi t
 request trong 2 giây liên tiếp khi hạn mức là 10/phút? Giải thích cách đạt được
 con số đó.
 
-> *Câu trả lời của bạn*
+> Với cách đếm theo phút đồng hồ, người dùng có thể gửi 10 request ở giây
+> 10:00:59 và 10 request nữa ở giây 10:01:00: tổng cộng 20 request trong
+> khoảng 2 giây, nhưng mỗi phút lịch vẫn chỉ ghi nhận 10 request. Cửa sổ trượt
+> của bài lưu timestamp của từng request trong Redis Sorted Set. Trước mỗi lần
+> kiểm tra, nó xóa các timestamp đã quá 60 giây rồi đếm phần còn lại; vì vậy
+> lượt thứ 11 trong cùng cửa sổ bị trả 429, dù đồng hồ vừa sang phút mới.
 
 ---
 
@@ -131,7 +136,13 @@ con số đó.
 Hai cơ chế này khác nhau ở điểm nào? Cho một tình huống mà rate limit cho qua
 nhưng cost guard phải chặn, và một tình huống ngược lại.
 
-> *Câu trả lời của bạn*
+> Rate limit giới hạn tần suất gọi trong 60 giây, còn cost guard giới hạn tổng
+> số tiền đã ghi nhận cho từng user trong tháng. Ví dụ, với hạn mức 10 lượt/phút
+> và ngân sách 10 USD, một user chỉ gọi 1 lượt trong phút nhưng đã tiêu 10.01
+> USD trong tháng: rate limit cho qua, cost guard trả 402. Ngược lại, user mới
+> tiêu 0.01 USD nhưng đã gửi đủ 10 lượt trong 60 giây: lượt thứ 11 bị rate
+> limit trả 429 dù vẫn còn ngân sách. Hai giới hạn giải quyết hai loại lạm dụng
+> khác nhau, nên `/ask` kiểm tra cả hai trước khi gọi mock LLM.
 
 ---
 
