@@ -1,101 +1,63 @@
-# Thông Tin Deploy — Checkpoint 5
+# Thông tin deploy — Checkpoint 5
 
-> Điền file này sau khi deploy xong. `pytest tests/test_cp5.py` đọc file này
-> để tìm địa chỉ service của bạn và gọi thử.
->
-> **Chỉ ghi TÊN biến môi trường, tuyệt đối không dán giá trị API key vào đây.**
-> Repo này công khai — dán khóa vào là mất khóa.
-
-## Thông Tin Học Viên
+## Thông tin học viên
 
 | Mục | Nội dung |
-|-----|----------|
-| Họ và tên | (điền họ tên) |
-| Mã học viên | (điền mã học viên) |
-| Repo | (điền link repo K4-L3B-DAY12-HoVaTen-MSSV-CloudServicesAndDeployment) |
+| --- | --- |
+| Họ và tên | Võ Huy Hoàng |
+| Mã học viên | 2A202602548 |
+| Repo | https://github.com/hoanghuy12351/K4-L3B-DAY12-VoHuyHoang-2A202602548-Cloud-Service-And-Deployment |
 
 ## Service
 
 | Mục | Nội dung |
-|-----|----------|
-| Public URL | https://TODO-thay-bang-url-that.up.railway.app |
-| Platform | Railway / Render / Cloud Run — (điền platform bạn dùng) |
-| Ngày deploy | (điền ngày) |
+| --- | --- |
+| Public URL | https://day12-agent-gr8d.onrender.com |
+| Platform | Render, Blueprint `day12-vohuyhoang-cp5` |
+| Ngày deploy | 2026-09-29 |
+| Web service | `day12-agent`, gói Free, trạng thái `Live` khi kiểm tra |
+| Key Value | `day12-redis`, được tạo từ cùng Blueprint |
+| Commit deploy | `50565852d6e548bbf5c1e7396ff90778d8827ec6` |
 
-## Biến Môi Trường Đã Set Trên Cloud
+## Biến môi trường trên Render
 
-Ghi tên biến và **nguồn giá trị**, không ghi giá trị:
+Chỉ ghi tên biến và nguồn cấp, không ghi giá trị secret.
 
-| Biến | Đã set | Ghi chú |
-|------|--------|---------|
-| `PORT` | ✅ | platform tự gán |
-| `AGENT_API_KEY` | ✅ | đặt trong dashboard, không nằm trong repo |
-| `REDIS_URL` | ✅ | (điền: Redis add-on của platform / Upstash / ...) |
-| `RATE_LIMIT_PER_MINUTE` | ✅ | 10 |
-| `MONTHLY_BUDGET_USD` | ✅ | 10.0 |
-| `LOG_LEVEL` | ✅ | INFO |
+| Biến | Nguồn cấp |
+| --- | --- |
+| `AGENT_API_KEY` | Nhập trực tiếp trên Render lúc tạo Blueprint; không nằm trong repo |
+| `REDIS_URL` | Render lấy `connectionString` nội bộ của `day12-redis` qua `fromService` |
+| `RATE_LIMIT_PER_MINUTE` | Giá trị `10` trong `render.yaml` |
+| `MONTHLY_BUDGET_USD` | Giá trị `10.0` trong `render.yaml` |
+| `LOG_LEVEL` | Giá trị `INFO` trong `render.yaml` |
+| `PORT` | Dockerfile đọc biến `PORT` do môi trường chạy cung cấp; nếu vắng mặt dùng 8000 |
 
-## Lệnh Kiểm Tra
+## Kiểm tra từ máy cá nhân qua Internet
 
-Thay `<URL>` bằng Public URL ở trên:
+Chạy trong PowerShell, tại thư mục gốc repo:
 
-```bash
-# 1. Liveness — mong đợi 200 {"status":"ok"}
-curl -i <URL>/health
-
-# 2. Readiness — mong đợi 200 {"status":"ready"} (đã nối được Redis)
-curl -i <URL>/ready
-
-# 3. Không có API key — mong đợi 401
-curl -i -X POST <URL>/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question":"Hello"}'
-
-# 4. Có API key — mong đợi 200 kèm câu trả lời
-curl -i -X POST <URL>/ask \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: $AGENT_API_KEY" \
-  -H "X-User-Id: sv-test" \
-  -d '{"question":"Deploy là gì?"}'
-
-# 5. Rate limit — gọi 15 lần, những lần cuối phải trả 429
-for i in $(seq 1 15); do
-  curl -s -o /dev/null -w "%{http_code} " -X POST <URL>/ask \
-    -H "Content-Type: application/json" \
-    -H "X-API-Key: $AGENT_API_KEY" \
-    -H "X-User-Id: sv-test" \
-    -d '{"question":"test"}'
-done; echo
+```powershell
+$base = 'https://day12-agent-gr8d.onrender.com'
+Invoke-WebRequest -Uri "$base/health" -TimeoutSec 90
+Invoke-WebRequest -Uri "$base/ready" -TimeoutSec 90
+try {
+    Invoke-WebRequest -Uri "$base/ask" -Method Post -ContentType 'application/json' -Body '{"question":"Hello"}' -TimeoutSec 90
+} catch {
+    [int]$_.Exception.Response.StatusCode
+}
 ```
 
-## Kết Quả Chạy Thật
+Kết quả quan sát ngày 2026-09-29:
 
-Dán output của các lệnh trên vào đây:
-
+```text
+GET  /health       200  {"status":"ok","service":"day12-agent","version":"1.0.0"}
+GET  /ready        200  {"status":"ready","redis":true}
+POST /ask (no key) 401  Unauthorized
 ```
-(điền output)
-```
 
-## Ảnh Chụp Màn Hình
+Ba kết quả trên chứng minh service công khai đang sống, kết nối được Redis và từ chối request không có khóa. Chưa kiểm tra `/ask` có khóa hoặc rate limit trên cloud; không ghi nhận các kết quả đó như đã chạy.
 
-Đặt ảnh trong thư mục `screenshots/`:
+## Ảnh minh chứng
 
-- `screenshots/dashboard.png` — trang quản lý service trên platform
-- `screenshots/health.png` — kết quả gọi `/health` từ trình duyệt hoặc curl
-
----
-
-## Nếu Dùng Phương Án Dự Phòng
-
-Không đăng ký được tài khoản cloud? Vẫn nộp được bài, nhưng CP5 tối đa 60% điểm:
-
-1. Đặt `LOCAL_FALLBACK=true` trong `.env`
-2. Chạy `docker compose up -d` rồi kiểm tra `docker compose ps`
-3. Chụp màn hình vào `screenshots/`
-4. Chạy `pytest tests/test_cp5.py -v` — bộ test sẽ tự chuyển sang kiểm tra
-   `http://localhost:8000`
-5. Ghi rõ lý do không deploy được vào phần dưới đây:
-
-```
-(điền lý do nếu dùng phương án dự phòng, ngược lại xóa mục này)
-```
+- `screenshots/blueprint-sync.png`: ảnh Blueprint sync tạo Key Value và web service do học viên cung cấp.
+- Ảnh dashboard `Live` và ảnh gọi `/health` cần được học viên chụp thêm trước khi nộp theo `SUBMISSION.md`.

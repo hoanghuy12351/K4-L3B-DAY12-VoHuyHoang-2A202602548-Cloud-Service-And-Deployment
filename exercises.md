@@ -3,10 +3,10 @@
 > **Bài làm cá nhân.** Trả lời bằng lời của chính bạn, dựa trên những gì bạn
 > quan sát được khi chạy code — không sao chép đáp án của người khác.
 >
-> Cách trả lời: thay dòng `> *Câu trả lời của bạn*` bằng câu trả lời.
+> Cách trả lời: thay phần câu trả lời mẫu bằng quan sát thực tế của bạn.
 > `grade.py` đếm số câu đã trả lời (15 điểm cho 10 câu).
 >
-> Họ và tên: ..........................  Mã học viên: ..........................
+> Họ và tên: Võ Huy Hoàng  Mã học viên: 2A202602548
 
 ---
 
@@ -184,4 +184,14 @@ Ghi lại **một** lỗi bạn gặp khi deploy lên cloud (build fail, health 
 timeout, sai REDIS_URL, app không đọc `$PORT`...): thông báo lỗi là gì, bạn
 tìm ra nguyên nhân bằng cách nào, và sửa ra sao?
 
-> *Câu trả lời của bạn*
+> Vướng mắc tôi gặp ở bước chọn repository trên Render: phần kết nối GitHub chỉ
+> hiển thị một repository khác, không thấy repo bài lab. Giao diện không đưa ra
+> thông báo lỗi build hay traceback; dấu hiệu là danh sách chỉ có `1 repo`.
+> Tôi kiểm tra `git remote -v` và `git ls-remote --heads origin main` để xác
+> nhận repo bài lab tồn tại trên GitHub, rồi dùng mục **Public Git Repository**
+> và nhập URL repo thay cho GitHub integration. Blueprint sync ở commit
+> `5056585` tạo được `day12-redis` và `day12-agent`; dashboard báo `Live`.
+> Kiểm tra qua URL công khai cho kết quả `/health` 200, `/ready` 200 với
+> `redis: true`, và `/ask` không có API key trả 401. Đây là vướng mắc kết nối
+> repo khi thiết lập deploy, không phải lỗi của ứng dụng lúc chạy; tôi không
+> bịa ra một thông báo lỗi cloud mà Render không hề hiển thị.
