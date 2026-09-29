@@ -63,12 +63,18 @@ docker images | grep agent
 
 | Bản | Dung lượng |
 |-----|-----------|
-| 1 stage (bản đầu) | ... MB |
-| Multi-stage | ... MB |
+| 1 stage (bản đầu) | 1.7 GB |
+| Multi-stage | 271 MB |
 
 Giải thích: phần dung lượng chênh lệch đó là những gì?
 
-> *Câu trả lời của bạn*
+> Tôi build bản một stage từ `python:3.11` và đo được 1.7 GB; bản multi-stage
+> dùng `python:3.11-slim` và đo được 271 MB. Chênh lệch khoảng 1.43 GB, tức
+> image multi-stage nhỏ hơn khoảng 84%. Phần lớn chênh lệch đến từ base image
+> Python đầy đủ lớn hơn đáng kể so với `slim`. Bản runtime multi-stage cũng chỉ
+> nhận các package đã cài từ builder và mã `app/`, `utils/`, không mang theo
+> toàn bộ thư mục build. Cả hai phép đo dùng cùng máy và cùng dependency trong
+> `requirements.txt`; đây là kích thước Docker hiển thị sau khi build.
 
 ---
 
@@ -78,7 +84,17 @@ Sửa một ký tự trong `app/main.py` rồi build lại. Với Dockerfile c�
 layer nào được dùng lại từ cache, layer nào phải chạy lại? Nếu bạn đặt
 `COPY . .` lên trước `RUN pip install` thì kết quả khác thế nào?
 
-> *Câu trả lời của bạn*
+> Tôi thêm tạm một ký tự vào docstring trong `app/main.py` rồi chạy lại
+> `docker build --progress=plain -t agent:cache-one-char .`. Trong log, các
+> layer `COPY requirements.txt`, `RUN pip install`, `COPY --from=builder`
+> đều hiện `CACHED`, vì file dependency và builder không thay đổi. Layer
+> `COPY app ./app` phải chạy lại do source đã đổi; các layer filesystem phía
+> sau như `COPY utils ./utils` và tạo user cũng chạy lại theo thứ tự layer.
+> Khi `COPY . .` đặt trước `RUN pip install`, thay đổi bất kỳ file source nào
+> cũng làm layer `COPY . .` đổi; do đó layer `pip install` phía sau bị vô hiệu
+> cache và cài lại toàn bộ dependency dù `requirements.txt` không đổi. Đặt
+> riêng `COPY requirements.txt` và cài dependency trước giúp giữ cache khi chỉ
+> sửa mã nguồn.
 
 ---
 
@@ -88,7 +104,14 @@ Container mặc định chạy bằng root. Mô tả chuỗi sự kiện dẫn t
 trong code Python của bạn" tới "kẻ tấn công có quyền cao trên máy host", và
 lệnh `USER` cắt đứt chuỗi đó ở chỗ nào.
 
-> *Câu trả lời của bạn*
+> Nếu ứng dụng Python có lỗ hổng cho phép chạy lệnh tùy ý, kẻ tấn công có thể
+> chiếm quyền của tiến trình bên trong container. Nếu tiến trình chạy bằng
+> root, kẻ đó có quyền cao nhất trong container, có thể đọc hoặc sửa file,
+> cài công cụ và khai thác cấu hình hay lỗi khác để tìm cách thoát container;
+> nếu việc thoát thành công, rủi ro với máy host sẽ lớn hơn. Lệnh `USER appuser`
+> chạy tiến trình bằng tài khoản thường, nên giảm quyền và giới hạn tác động
+> ban đầu của lỗ hổng. Đây là giảm thiểu rủi ro, không phải bảo đảm container
+> không thể bị thoát hoặc host không thể bị ảnh hưởng.
 
 ---
 

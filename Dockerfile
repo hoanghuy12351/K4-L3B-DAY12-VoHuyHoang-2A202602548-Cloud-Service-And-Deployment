@@ -21,14 +21,36 @@
 #            docker images day12-agent:prod     # xem dung lượng
 # ═══════════════════════════════════════════════════════════════════
 
-FROM python:3.11
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+# Dependency layer chỉ bị tạo lại khi requirements.txt thay đổi.
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+
+FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-COPY . .
+# Runtime chỉ nhận package đã cài, không mang theo công cụ của builder.
+COPY --from=builder /install /usr/local
 
-RUN pip install -r requirements.txt
+# Chỉ copy mã nguồn ứng dụng cần lúc chạy.
+COPY app ./app
+COPY utils ./utils
 
+# Container không chạy bằng root.
+RUN addgroup --system appgroup \
+    && adduser --system --ingroup appgroup appuser
+USER appuser
+
+ENV PORT=8000
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
+    CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.getenv('PORT', '8000') + '/health').read()" || exit 1
+
+# Dạng shell cho phép cloud truyền PORT lúc runtime; exec giữ đúng tín hiệu.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
