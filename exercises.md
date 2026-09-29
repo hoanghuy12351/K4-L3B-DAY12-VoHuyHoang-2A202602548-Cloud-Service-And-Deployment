@@ -16,7 +16,16 @@ Trong `Settings`, `agent_api_key` không có giá trị mặc định nên app c
 khi khởi động nếu thiếu biến môi trường. Hãy mô tả một tình huống cụ thể mà
 việc "chết sớm" này cứu bạn, so với việc để mặc định `"changeme"`.
 
-> *Câu trả lời của bạn*
+> Tôi đã thử khởi tạo `Settings` mà không nạp file `.env` và không cung cấp
+> biến môi trường `AGENT_API_KEY`. Kết quả quan sát được là Pydantic phát sinh
+> `ValidationError`, báo trường `agent_api_key` là bắt buộc, nên ứng dụng dừng
+> trước khi có thể phục vụ request. Điều này được gọi là fail fast vì lỗi cấu
+> hình được phát hiện ngay khi khởi động, thay vì để service chạy trong trạng
+> thái cấu hình sai rồi mới phát hiện trên production. Trong tình huống deploy
+> mà quên đặt secret, việc dừng sớm giúp tôi sửa cấu hình trước khi public API.
+> Nếu secret có giá trị mặc định như `"changeme"`, service vẫn có thể khởi động
+> và người khác có thể đoán hoặc dùng khóa mặc định để truy cập `/ask`, gây lạm
+> dụng API và phát sinh chi phí.
 
 ---
 
@@ -26,7 +35,19 @@ Chạy service và gọi `/ask` vài lần. Dán một dòng log JSON bạn thu 
 nêu **hai** việc bạn làm được với dòng log đó mà `print("đã trả lời xong")`
 không làm được.
 
-> *Câu trả lời của bạn*
+> Log tôi quan sát được khi gọi `log_event` trực tiếp là:
+> `{"event": "cp1_test", "level": "warning", "timestamp": "2026-09-29T03:41:18.805427+00:00", "user_id": "sv01", "message": "Kiem tra structured log"}`.
+> Dòng log gồm các trường `event`, `level`, `timestamp`, `user_id` và `message`.
+> So với `print("đã trả lời xong")`, JSON log cho phép tôi lọc theo mức
+> `warning` và nhóm hoặc đếm sự kiện theo `event` hay `user_id`; nó cũng cho
+> phép hệ thống giám sát đọc chính xác thời gian xảy ra sự kiện. Yêu cầu một
+> dòng quan trọng vì nền tảng cloud thường coi mỗi dòng stdout là một bản ghi;
+> nếu một JSON bị tách thành nhiều dòng thì bộ thu thập log có thể coi chúng là
+> nhiều sự kiện hỏng. Từ dòng log này, tôi có thể tạo truy vấn đếm số cảnh báo
+> theo `event` trong 5 phút gần nhất, hoặc cảnh báo khi một `user_id` tạo quá
+> nhiều sự kiện `warning`. Ở CP1 tôi chưa gọi được `/ask` vì endpoint đó còn
+> phụ thuộc các TODO của CP3/CP4; sau khi hoàn thành các checkpoint đó, tôi sẽ
+> thay dòng thử nghiệm này bằng log `ask_completed` thu được từ request thật.
 
 ---
 
